@@ -10,9 +10,10 @@ def main():
     user_selection = get_user_selection()
 
     # Fetch the data basedo on the user selection
+    country_selection = ''
+
     if user_selection == "U":
-        print("TODO, EXITING")
-        exit()
+        country_selection = USA_selector
     elif user_selection == "P":
         print("TODO, EXITING")
         exit()
@@ -20,12 +21,29 @@ def main():
         print("That is not a valid selection, exiting program")
         exit()
 
+    # now pull the data from the database
+    print(fetch_data_from_database(country_selection))
+
 # this function takes in a selector and pulls data from the OU database based on the selector
 
 
 def fetch_data_from_database(country_selection):
-    print('todo')
-    return
+    try:
+        conn = psycopg2.connect(
+            host="pixel.ourcloud.ou.edu",
+            port=5432,
+            database="panviz",
+            user="panviz_readonly",
+            password="T3u&c7U58V9H"
+        )
+    except Exception as err:
+        print("Unable to connect! Exiting! Error:", err)
+        exit()
+    cursor = conn.cursor()
+    cursor.execute(country_selection)
+    results = cursor.fetchall()
+    conn.close()
+    return results
 
 # gets and returns user input
 
