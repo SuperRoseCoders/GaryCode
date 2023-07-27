@@ -1,4 +1,7 @@
 import psycopg2
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import matplotlib.ticker as ticker
 
 
 USA_selector = 'SELECT "date", "cases", "deaths" FROM "USACountry"'
@@ -9,7 +12,7 @@ def main():
     # get user input
     user_selection = get_user_selection()
 
-    # Fetch the data basedo on the user selection
+    # Fetch the data based on the user selection
     country_selection = ''
 
     if user_selection == "U":
@@ -22,7 +25,7 @@ def main():
         exit()
 
     # now pull the data from the database
-    print(fetch_data_from_database(country_selection))
+    database_results = fetch_data_from_database(country_selection)
 
 # this function takes in a selector and pulls data from the OU database based on the selector
 
@@ -58,6 +61,26 @@ def get_user_selection():
     user_selection = user_selection.upper()
 
     return user_selection
+
+# Function to create 3d scatter plots
+
+
+def create_3d_scatter_plot(dates, cases, deaths):
+    dates_numeric = mdates.date2num(dates)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_date(dates_numeric, cases, deaths,
+                 marker='o', linestyle='-', tz=None)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Cases")
+    ax.set_zlabel("Deaths")
+    ax.set_title("COVID-19 Cases and Deaths Over Time")
+    # Change the number of ticks as needed
+    ax.xaxis.set_major_locator(ticker.MaxNLocator(10))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    for tick in ax.get_xticklabels():
+        tick.set_rotation(45)
+    return fig, ax
 
 
 if __name__ == "__main__":
