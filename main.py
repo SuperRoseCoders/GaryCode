@@ -1,80 +1,31 @@
-import psycopg2
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-import matplotlib.ticker as ticker
-import pandas as pd
+# Import necessary libraries
+import psycopg2  # For connecting to and interacting with the database
+import matplotlib.pyplot as plt  # For creating plots
+import pandas as pd  # For data manipulation
+from mpl_toolkits.mplot3d import Axes3D  # For 3D plots
 
-
+# SQL commands to fetch data from the database
 USA_selector = 'SELECT "date", "cases", "deaths" FROM "USACountry"'
-Peru_selector = 'SELECT "fecha_resultado", "num_death_cases", "num_positive_cases" FROM public.distrito_death_positive_cases'
+Peru_selector = 'SELECT "fecha_resultado", "num_positive_cases", "num_death_cases" FROM public.distrito_death_positive_cases'
 
 
 def main():
-    # get user input
+    # Get the user's choice (U for USA or P for Peru)
     user_selection = get_user_selection()
 
-    # Fetch the data based on the user selection
-    country_selection = ''
-
+    # Based on the user's choice, fetch the appropriate data and plot it
     if user_selection == "U":
-        country_selection = USA_selector
-        database_results = fetch_data_from_database(country_selection)
-        plot_3D(database_results)
+        plot_3D(USA_selector, ['date', 'cases', 'deaths'])
     elif user_selection == "P":
-        country_selection = Peru_selector
-        database_results = fetch_data_from_database(country_selection)
-
-        # Create a DataFrame from your data
-        df = pd.DataFrame(database_results, columns=[
-                          'fecha_resultado', 'num_death_cases', 'num_positive_cases'])
-
-        # Convert 'num_positive_cases' and 'num_death_cases' to integers
-        df['num_positive_cases'] = df['num_positive_cases'].astype(int)
-        df['num_death_cases'] = df['num_death_cases'].astype(int)
-
-        # Group by date and sum cases and deaths
-        grouped_df = df.groupby('fecha_resultado').agg(
-            {'num_positive_cases': 'sum', 'num_death_cases': 'sum'}).reset_index()
-
-        # Convert 'fecha_resultado' to datetime
-        grouped_df['fecha_resultado'] = pd.to_datetime(
-            grouped_df['fecha_resultado'])
-
-        # Save the original dates for later
-        date_labels = grouped_df['fecha_resultado'].dt.strftime('%Y-%m-%d')
-
-        # Convert 'fecha_resultado' to a numerical value for plotting (e.g., number of days since the first date in the dataset)
-        grouped_df['fecha_resultado'] = (
-            grouped_df['fecha_resultado'] - grouped_df['fecha_resultado'].min()).dt.days
-
-        # Create 3D scatter plot
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-
-        ax.scatter(grouped_df['fecha_resultado'],
-                   grouped_df['num_positive_cases'], grouped_df['num_death_cases'])
-
-        # Set the x-ticks and their labels
-        step_size = min(60, len(grouped_df['fecha_resultado']))
-        ax.set_xticks(grouped_df['fecha_resultado']
-                      [::step_size])  # Choose every nth date
-        # Choose every nth date label
-        ax.set_xticklabels(date_labels[::step_size], rotation=45, ha='right')
-
-        ax.set_xlabel('Fecha Resultado')
-        ax.set_ylabel('Num Positive Cases')
-        ax.set_zlabel('Num Death Cases')
-
-        plt.show()
+        plot_3D(Peru_selector, ['fecha_resultado',
+                'num_positive_cases', 'num_death_cases'])
     else:
         print("That is not a valid selection, exiting program")
         exit()
 
 
-# this function takes in a selector and pulls data from the OU database based on the selector
-
-
 def fetch_data_from_database(country_selection):
+    # Try to connect to the database
     try:
         conn = psycopg2.connect(
             host="pixel.ourcloud.ou.edu",
@@ -84,59 +35,87 @@ def fetch_data_from_database(country_selection):
             password="T3u&c7U58V9H"
         )
     except Exception as err:
+        # If the connection fails, print the error message and exit the program
         print("Unable to connect! Exiting! Error:", err)
         exit()
+
+    # If the connection is successful, fetch the data
     cursor = conn.cursor()
     cursor.execute(country_selection)
     results = cursor.fetchall()
-    conn.close()
-    return results
 
-# gets and returns user input
+    # Print out the first line of the returned data
+    print("First line of data:", results[0])
+
+    # Close the connection to the database
+    conn.close()
+
+    # Return the fetched data
+    return results
 
 
 def get_user_selection():
-  # get input from user
-    user_selection = ''
+    # Ask the user to choose a country and return their choice
     user_selection = input(
         "What country would you like data for?\nPress U for USA Press P for Peru:\n")
-
-    # set input to uppercase for cosistency
+    # Convert the choice to uppercase for consistency
     user_selection = user_selection.upper()
-
     return user_selection
 
-# Function to create 3d scatter plots
 
+def plot_3D(country_selection, column_names):
+    # Fetch the data
+    database_results = fetch_data_from_database(country_selection)
 
-def create_3d_scatter_plot(dates, cases, deaths):
-    dates_numeric = mdates.date2num(dates)
+    # Convert the data into a DataFrame (a table-like data structure)
+    df = pd.DataFrame(database_results, columns=column_names)
+
+    # Make sure the numbers in the 'cases' and 'deaths' columns are integers
+    df[column_names[1]] = df[column_names[1]].astype(int)
+    df[column_names[2]] = df[column_names[2]].astype(int)
+
+    # Group the data by date and add up the number of cases and deaths for each date
+    grouped_df = df.groupby(column_names[0]).agg(
+        {column_names[1]: 'sum', column_names[2]: 'sum'}).reset_index()
+
+    # Normalize the 'cases' and 'deaths' columns
+    grouped_df[column_names[1]] = (grouped_df[column_names[1]] - grouped_df[column_names[1]].min()) / (
+        grouped_df[column_names[1]].max() - grouped_df[column_names[1]].min())
+    grouped_df[column_names[2]] = (grouped_df[column_names[2]] - grouped_df[column_names[2]].min()) / (
+        grouped_df[column_names[2]].max() - grouped_df[column_names[2]].min())
+
+    # Convert the dates to a format that can be used for plotting
+    grouped_df[column_names[0]] = pd.to_datetime(grouped_df[column_names[0]])
+
+    # Save the dates as strings for the x-axis labels
+    date_labels = grouped_df[column_names[0]].dt.strftime('%Y-%m-%d')
+
+    # Convert the dates to numbers (number of days since the first date) for plotting
+    grouped_df[column_names[0]] = (
+        grouped_df[column_names[0]] - grouped_df[column_names[0]].min()).dt.days
+
+    # Create a 3D plot
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.plot_date(dates_numeric, cases, deaths,
-                 marker='o', linestyle='-', tz=None)
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Cases")
-    ax.set_zlabel("Deaths")
-    ax.set_title("COVID-19 Cases and Deaths Over Time")
-    # Change the number of ticks as needed
-    ax.xaxis.set_major_locator(ticker.MaxNLocator(10))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-    for tick in ax.get_xticklabels():
-        tick.set_rotation(45)
-    return fig, ax
 
+    # Add the data to the plot
+    ax.scatter(grouped_df[column_names[0]],
+               grouped_df[column_names[1]], grouped_df[column_names[2]])
 
-def plot_3D(database_results):
-    # break the data down into components
-    dates = [result[0] for result in database_results]
-    cases = [result[1] for result in database_results]
-    deaths = [result[2] for result in database_results]
+    # Set the x-axis labels to show every 60th date
+    step_size = min(60, len(grouped_df[column_names[0]]))
+    ax.set_xticks(grouped_df[column_names[0]][::step_size])
+    ax.set_xticklabels(date_labels[::step_size], rotation=45, ha='right')
 
-    fig, ax = create_3d_scatter_plot(dates, cases, deaths)
+    # Set the labels for the x, y, and z axes
+    ax.set_xlabel(column_names[0])
+    ax.set_ylabel(column_names[1])
+    ax.set_zlabel(column_names[2])
 
+    # Show the plot
     plt.show()
 
 
+# If this script is being run directly (not imported as a module), start the program by calling the main() function
 if __name__ == "__main__":
     main()
